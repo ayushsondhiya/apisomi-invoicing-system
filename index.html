@@ -1,0 +1,878 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Apisomi — Automated Invoicing & Ledger System</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  
+  <!-- SheetJS for Excel logging & generation -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <!-- html2pdf.js for vector-accurate PDF export -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+</head>
+<body>
+  <div class="app-layout">
+    <!-- Top Navigation Bar -->
+    <header class="top-nav">
+      <div class="nav-brand">
+        <div class="logo-badge">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+            <polyline points="2 17 12 22 22 17"></polyline>
+            <polyline points="2 12 12 17 22 12"></polyline>
+          </svg>
+        </div>
+        <div>
+          <h1 class="brand-title">APISOMI <span class="badge-pro">STUDIO</span></h1>
+          <p class="brand-subtitle">Invoice Generator & Automated Excel Ledger</p>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <!-- GST / Non-GST Switch -->
+        <div class="gst-toggle-card" title="Toggle between Non-GST Bill of Supply and GST Tax Invoice">
+          <span class="gst-label">Tax Regime:</span>
+          <label class="switch">
+            <input type="checkbox" id="taxModeToggle">
+            <span class="slider"></span>
+          </label>
+          <span id="taxModeBadge" class="mode-pill non-gst">Non-GST (Current)</span>
+        </div>
+
+        <!-- Google Sheet Sync Button & Status -->
+        <button id="googleSheetBtn" class="btn btn-secondary" title="Google Sheet Configuration">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M4 3h16a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"></path>
+            <polyline points="4 9 20 9"></polyline>
+            <polyline points="4 15 20 15"></polyline>
+            <polyline points="10 3 10 21"></polyline>
+          </svg>
+          <span id="gsheetBtnText">Google Sheet</span>
+          <span id="gsheetStatusDot" class="status-dot dot-inactive"></span>
+        </button>
+
+        <!-- Direct Update Sheet Button -->
+        <button id="syncNowBtn" class="btn btn-secondary" title="Push current invoice to Google Sheet">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="23 4 23 10 17 10"></polyline>
+            <polyline points="1 20 1 14 7 14"></polyline>
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+          </svg>
+          Update Sheet
+        </button>
+
+        <!-- Ledger View Button -->
+        <button id="viewLedgerBtn" class="btn btn-secondary">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <line x1="16" y1="13" x2="8" y2="13"></line>
+            <line x1="16" y1="17" x2="8" y2="17"></line>
+          </svg>
+          Invoices Ledger (<span id="ledgerCount">0</span>)
+        </button>
+
+        <!-- Quick Excel Export -->
+        <button id="quickExcelBtn" class="btn btn-secondary" title="Directly export logged Excel sheet">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+            <line x1="3" y1="9" x2="21" y2="9"></line>
+            <line x1="3" y1="15" x2="21" y2="15"></line>
+            <line x1="9" y1="3" x2="9" y2="21"></line>
+          </svg>
+          Export .xlsx
+        </button>
+
+        <!-- PDF Export & Log Button -->
+        <button id="downloadPdfBtn" class="btn btn-primary">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+          Export PDF & Log
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <main class="editor-workspace">
+      <!-- Left Panel: Data Entry & Configuration -->
+      <section class="form-pane">
+        <div class="panel-header">
+          <h2>Apisomi Invoice Editor</h2>
+          <button id="resetFormBtn" class="btn-text">Reset to Template Defaults</button>
+        </div>
+
+        <div class="form-sections">
+          <!-- 1. Metadata & Convention -->
+          <div class="card-section">
+            <div class="section-title">
+              <span class="step-num">1</span>
+              <h3>Document Numbering & Metadata</h3>
+            </div>
+            <div class="grid-3">
+              <div class="form-group">
+                <label for="projectCode">Project ID (e.g. SSV003)</label>
+                <input type="text" id="projectCode" value="SSV003" placeholder="3 letters + 3 digits">
+              </div>
+              <div class="form-group">
+                <label for="invSeq">Invoice Sequence (NN)</label>
+                <input type="text" id="invSeq" value="01" placeholder="01, 02, etc.">
+              </div>
+              <div class="form-group">
+                <label for="invNumber">Calculated Invoice No.</label>
+                <input type="text" id="invNumber" value="APS-INV-SSV003-01" class="mono font-semibold" readonly>
+              </div>
+            </div>
+
+            <div class="grid-3">
+              <div class="form-group">
+                <label for="invDate">Invoice Date</label>
+                <input type="date" id="invDate">
+              </div>
+              <div class="form-group">
+                <label for="invDueDate">Due Date</label>
+                <input type="date" id="invDueDate">
+              </div>
+              <div class="form-group">
+                <label for="docVersion">Version</label>
+                <input type="text" id="docVersion" value="v1.0 · Issued">
+              </div>
+            </div>
+
+            <div class="grid-2">
+              <div class="form-group">
+                <label for="proposalRef">Proposal Ref & Client PO</label>
+                <input type="text" id="proposalRef" value="APS-TCP-SSV003-01 · Client PO No. [N/A]">
+              </div>
+              <div class="form-group">
+                <label for="milestoneDesc">Milestone</label>
+                <input type="text" id="milestoneDesc" value="Milestone 2 of 4 — Design & Prototype sign-off">
+              </div>
+            </div>
+          </div>
+
+          <!-- 2. Parties: Billed By (Apisomi) & Billed To (Client) -->
+          <div class="card-section">
+            <div class="section-title">
+              <span class="step-num">2</span>
+              <h3>Parties (Billed By & Billed To)</h3>
+            </div>
+
+            <!-- Billed To (Client) -->
+            <div class="sub-card">
+              <span class="sub-card-title">Billed To (Client)</span>
+              <div class="grid-2">
+                <div class="form-group">
+                  <label for="clientName">Client Company Name</label>
+                  <input type="text" id="clientName" value="Acme Digital Systems Pvt Ltd">
+                </div>
+                <div class="form-group">
+                  <label for="clientContact">Contact Person & Designation</label>
+                  <input type="text" id="clientContact" value="Vikram Sharma, Director of Technology">
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="clientAddress">Billing Address</label>
+                <input type="text" id="clientAddress" value="Plot 42, Sector 18, Udyog Vihar, Gurugram, Haryana – 122015">
+              </div>
+              <div class="grid-3">
+                <div class="form-group">
+                  <label for="clientStateSelect">Client State (Place of Supply)</label>
+                  <select id="clientStateSelect" class="styled-select">
+                    <option value="23|Madhya Pradesh">Madhya Pradesh (23) [Intra-state: CGST+SGST]</option>
+                    <option value="06|Haryana" selected>Haryana (06) [Inter-state: IGST]</option>
+                    <option value="07|Delhi">Delhi (07) [Inter-state: IGST]</option>
+                    <option value="27|Maharashtra">Maharashtra (27) [Inter-state: IGST]</option>
+                    <option value="29|Karnataka">Karnataka (29) [Inter-state: IGST]</option>
+                    <option value="33|Tamil Nadu">Tamil Nadu (33) [Inter-state: IGST]</option>
+                    <option value="36|Telangana">Telangana (36) [Inter-state: IGST]</option>
+                    <option value="24|Gujarat">Gujarat (24) [Inter-state: IGST]</option>
+                    <option value="09|Uttar Pradesh">Uttar Pradesh (09) [Inter-state: IGST]</option>
+                    <option value="19|West Bengal">West Bengal (19) [Inter-state: IGST]</option>
+                    <option value="08|Rajasthan">Rajasthan (08) [Inter-state: IGST]</option>
+                    <option value="99|Export/Other">Export / Other (99)</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="clientGstin">Client GSTIN</label>
+                  <input type="text" id="clientGstin" value="06AAACA1234A1Z5" placeholder="Or 'Unregistered'">
+                </div>
+                <div class="form-group">
+                  <label for="clientPan">Client PAN</label>
+                  <input type="text" id="clientPan" value="AAACA1234A">
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="clientEmailPhone">Client Email & Phone</label>
+                <input type="text" id="clientEmailPhone" value="vikram@acmedigital.com / +91 98111 22334">
+              </div>
+            </div>
+
+            <!-- Billed By (Apisomi Details) -->
+            <div class="sub-card mt-2">
+              <span class="sub-card-title">Billed By (Apisomi Defaults)</span>
+              <div class="grid-2">
+                <div class="form-group">
+                  <label for="apisomiName">Issuer Legal Name</label>
+                  <input type="text" id="apisomiName" value="Apisomi (Prop. Ayush Sondhiya)">
+                </div>
+                <div class="form-group">
+                  <label for="apisomiContact">Founder Contact</label>
+                  <input type="text" id="apisomiContact" value="Ayush Sondhiya, Founder">
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="apisomiAddress">Apisomi Registered Address</label>
+                <input type="text" id="apisomiAddress" value="Scheme No. 54, Vijay Nagar, Jabalpur, Madhya Pradesh – 482002, India">
+              </div>
+              <div class="grid-3">
+                <div class="form-group">
+                  <label for="apisomiGstin">Apisomi GSTIN <span id="gstinStatusLabel" class="tag-status">When Received</span></label>
+                  <input type="text" id="apisomiGstin" placeholder="e.g. 23AAAAA0000A1Z5 (or Applied For)" value="Applied for / Non-GST">
+                </div>
+                <div class="form-group">
+                  <label for="apisomiPan">Apisomi PAN</label>
+                  <input type="text" id="apisomiPan" value="ABCDE1234F">
+                </div>
+                <div class="form-group">
+                  <label for="apisomiState">State & Code</label>
+                  <input type="text" id="apisomiState" value="Madhya Pradesh (23)" readonly>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 3. Project Header & Line Items -->
+          <div class="card-section">
+            <div class="section-title-between">
+              <div class="section-title">
+                <span class="step-num">3</span>
+                <h3>Project & Line Items</h3>
+              </div>
+              <button type="button" id="addItemBtn" class="btn btn-sm btn-outline">+ Add Deliverable</button>
+            </div>
+
+            <div class="grid-3">
+              <div class="form-group">
+                <label for="projectName">Project Name</label>
+                <input type="text" id="projectName" value="Drone Fleet Telemetry & Cloud Platform">
+              </div>
+              <div class="form-group">
+                <label for="projectPeriod">Billing / Milestone Period</label>
+                <input type="text" id="projectPeriod" value="01 Oct 2026 – 25 Oct 2026">
+              </div>
+              <div class="form-group">
+                <label for="discountPercent">Discount % (if any)</label>
+                <input type="number" id="discountPercent" value="0" min="0" max="100" step="any">
+              </div>
+            </div>
+
+            <div class="table-responsive mt-2">
+              <table class="editor-table" id="itemsInputTable">
+                <thead>
+                  <tr>
+                    <th style="width: 38%;">Description</th>
+                    <th style="width: 14%;">SAC</th>
+                    <th style="width: 10%;">Qty</th>
+                    <th style="width: 12%;">Unit</th>
+                    <th style="width: 14%;">Rate (₹)</th>
+                    <th style="width: 12%;">Total (₹)</th>
+                    <th style="width: 4%;"></th>
+                  </tr>
+                </thead>
+                <tbody id="itemsTableBody">
+                  <!-- Generated by JS -->
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Tax Rate Override (when GST mode is active) -->
+            <div id="gstRateRow" class="gst-rate-box gst-dependent-field hidden">
+              <div class="flex-between">
+                <div>
+                  <label>GST Tax Calculation Mode:</label>
+                  <span id="placeOfSupplyHint" class="place-hint">Client State: Haryana (06) → IGST 18%</span>
+                </div>
+                <select id="gstRateSelect" class="styled-select" style="max-width: 280px;">
+                  <option value="18" selected>18% Standard Services</option>
+                  <option value="12">12%</option>
+                  <option value="5">5%</option>
+                  <option value="28">28%</option>
+                  <option value="custom">Custom Rate %</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- 4. Payment Installments & Scheduled Tranches -->
+          <div class="card-section">
+            <div class="section-title-between">
+              <div class="section-title">
+                <span class="step-num">4</span>
+                <h3>Payment Installments & Schedule</h3>
+              </div>
+              <button type="button" id="addInstallmentBtn" class="btn btn-sm btn-outline">+ Add Installment</button>
+            </div>
+            <p class="section-help-text">
+              Configure installment tranches with scheduled dates. Leave the Txn/UTR reference field empty for upcoming/pending payments.
+            </p>
+
+            <div class="table-responsive">
+              <table class="editor-table">
+                <thead>
+                  <tr>
+                    <th style="width: 34%;">Milestone / Tranche</th>
+                    <th style="width: 22%;">Due Date</th>
+                    <th style="width: 20%;">Amount (₹)</th>
+                    <th style="width: 20%;">Txn Ref / UTR #</th>
+                    <th style="width: 4%;"></th>
+                  </tr>
+                </thead>
+                <tbody id="installmentsTableBody">
+                  <!-- Generated by JS -->
+                </tbody>
+              </table>
+            </div>
+
+            <div class="grid-2 mt-2">
+              <div class="form-group">
+                <label for="advanceReceivedInput">Less: Advance Received (₹)</label>
+                <input type="number" id="advanceReceivedInput" value="0" min="0" step="any" placeholder="0.00">
+              </div>
+              <div class="form-group">
+                <label for="autoRoundToggle">Round-off Grand Total to Nearest Rupee?</label>
+                <select id="autoRoundSelect" class="styled-select">
+                  <option value="yes" selected>Yes (Standard GST requirement)</option>
+                  <option value="no">No (Exact decimals)</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- 5. Payment Details & Bank Settlement -->
+          <div class="card-section">
+            <div class="section-title">
+              <span class="step-num">5</span>
+              <h3>Bank & Settlement Details</h3>
+            </div>
+            <div class="grid-2">
+              <div class="form-group">
+                <label for="bankAccName">Account Name</label>
+                <input type="text" id="bankAccName" value="Apisomi">
+              </div>
+              <div class="form-group">
+                <label for="bankBranch">Bank & Branch</label>
+                <input type="text" id="bankBranch" value="HDFC Bank, Napier Town Branch, Jabalpur">
+              </div>
+            </div>
+            <div class="grid-3">
+              <div class="form-group">
+                <label for="bankAccNo">Account Number</label>
+                <input type="text" id="bankAccNo" value="50200088991122" class="mono">
+              </div>
+              <div class="form-group">
+                <label for="bankIfsc">IFSC Code</label>
+                <input type="text" id="bankIfsc" value="HDFC0001234" class="mono">
+              </div>
+              <div class="form-group">
+                <label for="bankUpi">UPI ID</label>
+                <input type="text" id="bankUpi" value="apisomi@okhdfcbank" class="mono">
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="projectSpecificNote">Project Notes (Optional)</label>
+              <input type="text" id="projectSpecificNote" value="Next milestone: Milestone 3 — Alpha deployment & QA testing scheduled for 15 Nov 2026.">
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right Panel: Live Document Preview (Exact Apisomi Template) -->
+      <section class="preview-pane">
+        <div class="preview-toolbar">
+          <div class="preview-label">
+            <span class="live-dot"></span> Live A4 Preview &middot; <span id="previewDocType">Non-GST Bill of Supply</span>
+          </div>
+          <div class="toolbar-tools">
+            <span class="file-name-preview" id="fileNamePreview">Apisomi_SSV003_Invoice_01.pdf</span>
+            <button id="printBtn" class="btn-icon" title="Browser Print (Ctrl+P / Cmd+P)">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="6 9 6 2 18 2 18 9"></polyline>
+                <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+                <rect x="6" y="14" width="12" height="8"></rect>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- The A4 Sheet Simulator -->
+        <div class="paper-container">
+          <div id="invoiceDocument" class="invoice-paper">
+            
+            <!-- Apisomi Document Header -->
+            <div class="doc-header">
+              <div class="header-main-title">
+                <h1 id="prevDocHeading">APISOMI — TAX INVOICE</h1>
+              </div>
+              
+              <div class="company-block">
+                <div class="comp-title-row">
+                  <span class="comp-brand">APISOMI</span>
+                  <span class="comp-separator">|</span>
+                  <span class="comp-services">Software &middot; Web &middot; Mobile &middot; Drone Surveillance &middot; 3D</span>
+                </div>
+                <div class="comp-address-line" id="prevApisomiAddress">
+                  Scheme No. 54, Vijay Nagar, Jabalpur, Madhya Pradesh – 482002, India
+                </div>
+                <div class="comp-contact-line">
+                  <span id="prevApisomiEmail">ayush.sondhiya@apisomi.com</span> &middot; 
+                  <span id="prevApisomiPhone">+91 99779 92588</span> &middot; 
+                  <span class="comp-web">www.apisomi.com</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Metadata Table -->
+            <div class="meta-table-wrap">
+              <table class="apisomi-table meta-table">
+                <thead>
+                  <tr>
+                    <th style="width: 25%;">Field</th>
+                    <th style="width: 75%;">Details</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="bold-cell">Invoice No.</td>
+                    <td class="mono-cell bold-cell" id="prevInvNum">APS-INV-SSV003-01</td>
+                  </tr>
+                  <tr>
+                    <td class="bold-cell">Version</td>
+                    <td id="prevVersion">v1.0 &middot; Issued</td>
+                  </tr>
+                  <tr>
+                    <td class="bold-cell">Invoice Date</td>
+                    <td id="prevInvDate">25 Oct 2026</td>
+                  </tr>
+                  <tr>
+                    <td class="bold-cell">Due Date</td>
+                    <td id="prevInvDueDate">09 Nov 2026 (Net 15)</td>
+                  </tr>
+                  <tr>
+                    <td class="bold-cell">Proposal Ref.</td>
+                    <td id="prevProposalRef">APS-TCP-SSV003-01 &middot; Client PO No. [N/A]</td>
+                  </tr>
+                  <tr>
+                    <td class="bold-cell">Milestone</td>
+                    <td id="prevMilestone">Milestone 2 of 4 — Design & Prototype sign-off</td>
+                  </tr>
+                  <tr>
+                    <td class="bold-cell">Author</td>
+                    <td>Ayush Sondhiya</td>
+                  </tr>
+                  <tr>
+                    <td class="bold-cell">Classification</td>
+                    <td>Confidential</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Billed By / Billed To Section -->
+            <div class="section-heading">Billed By / Billed To</div>
+            <div class="parties-table-wrap">
+              <table class="apisomi-table parties-table">
+                <thead>
+                  <tr>
+                    <th style="width: 20%;">Field</th>
+                    <th style="width: 40%;">Billed By</th>
+                    <th style="width: 40%;">Billed To</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="bold-cell">Name</td>
+                    <td id="prevPartiesBilledByName">Apisomi (Prop. Ayush Sondhiya)</td>
+                    <td class="bold-cell" id="prevPartiesClientName">Acme Digital Systems Pvt Ltd</td>
+                  </tr>
+                  <tr>
+                    <td class="bold-cell">Contact</td>
+                    <td id="prevPartiesBilledByContact">Ayush Sondhiya, Founder</td>
+                    <td id="prevPartiesClientContact">Vikram Sharma, Director of Technology</td>
+                  </tr>
+                  <tr>
+                    <td class="bold-cell">Address</td>
+                    <td id="prevPartiesBilledByAddr">Jabalpur, Madhya Pradesh – 482002</td>
+                    <td id="prevPartiesClientAddr">Plot 42, Sector 18, Gurugram, Haryana</td>
+                  </tr>
+                  <tr>
+                    <td class="bold-cell">GSTIN</td>
+                    <td id="prevPartiesBilledByGst">Applied for / Non-GST</td>
+                    <td id="prevPartiesClientGst">06AAACA1234A1Z5</td>
+                  </tr>
+                  <tr>
+                    <td class="bold-cell">PAN</td>
+                    <td id="prevPartiesBilledByPan" class="mono">ABCDE1234F</td>
+                    <td id="prevPartiesClientPan" class="mono">AAACA1234A</td>
+                  </tr>
+                  <tr>
+                    <td class="bold-cell">State (Code)</td>
+                    <td id="prevPartiesBilledByState">Madhya Pradesh (23)</td>
+                    <td id="prevPartiesClientState">Haryana (06)</td>
+                  </tr>
+                  <tr>
+                    <td class="bold-cell">Email / Phone</td>
+                    <td>ayush.sondhiya@apisomi.com / +91 99779 92588</td>
+                    <td id="prevPartiesClientEmailPhone">vikram@acmedigital.com / +91 98111 22334</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Place of Supply Callout -->
+            <div class="place-of-supply-banner" id="prevPlaceOfSupply">
+              <strong>Place of Supply:</strong> Haryana (06) — other state &rarr; IGST.
+            </div>
+
+            <!-- Project & Line Items Section -->
+            <div class="section-heading">Project & Line Items</div>
+            <div class="project-header-strip">
+              <strong>Project:</strong> <span id="prevProjectName">Drone Fleet Telemetry Platform</span> &nbsp;&middot;&nbsp; 
+              <strong>Project Code:</strong> <span id="prevProjectCode" class="mono">SSV003</span> &nbsp;&middot;&nbsp; 
+              <strong>Period:</strong> <span id="prevProjectPeriod">01 Oct 2026 – 25 Oct 2026</span>
+            </div>
+
+            <div class="items-table-wrap">
+              <table class="apisomi-table items-table">
+                <thead>
+                  <tr>
+                    <th style="width: 5%;">#</th>
+                    <th style="width: 44%;">Description</th>
+                    <th style="width: 11%;">SAC</th>
+                    <th style="width: 8%; text-align: center;">Qty</th>
+                    <th style="width: 10%; text-align: center;">Unit</th>
+                    <th style="width: 11%; text-align: right;">Rate (₹)</th>
+                    <th style="width: 11%; text-align: right;">Amount (₹)</th>
+                  </tr>
+                </thead>
+                <tbody id="prevItemsTbody">
+                  <!-- Generated items -->
+                </tbody>
+              </table>
+            </div>
+            <div class="sac-footnote">
+              *SAC 998314 covers IT design and development services; confirm codes for SMMA, drone and 3D work with your CA.
+            </div>
+
+            <!-- Payment Schedule / Installments Table -->
+            <div class="section-heading" style="margin-top: 14px;">Payment Schedule & Installments</div>
+            <div class="installments-table-wrap">
+              <table class="apisomi-table installments-table">
+                <thead>
+                  <tr>
+                    <th style="width: 38%;">Tranche / Milestone Description</th>
+                    <th style="width: 20%;">Scheduled Due Date</th>
+                    <th style="width: 20%; text-align: right;">Amount (₹)</th>
+                    <th style="width: 22%; text-align: center;">Txn Ref / UTR #</th>
+                  </tr>
+                </thead>
+                <tbody id="prevInstallmentsTbody">
+                  <!-- Installment rows -->
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Summary Table & Calculations -->
+            <div class="summary-and-words-row">
+              <div class="words-and-notes-col">
+                <div class="amount-in-words-card">
+                  <span class="words-label">Amount in words:</span>
+                  <p id="prevAmountWords" class="words-val">Indian Rupees Sixty Thousand Only.</p>
+                </div>
+              </div>
+
+              <div class="summary-table-col">
+                <table class="apisomi-table summary-table">
+                  <thead>
+                    <tr>
+                      <th style="width: 60%;">Item</th>
+                      <th style="width: 40%; text-align: right;">Amount (₹)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>Subtotal</td>
+                      <td class="mono text-right" id="prevSummarySubtotal">0.00</td>
+                    </tr>
+                    <tr id="prevDiscountRow">
+                      <td>Less: Discount (<span id="prevDiscountPct">0</span>%)</td>
+                      <td class="mono text-right" id="prevSummaryDiscount">– 0.00</td>
+                    </tr>
+                    <tr class="subtotal-highlight-row">
+                      <td class="bold-cell">Taxable Value</td>
+                      <td class="mono text-right bold-cell" id="prevSummaryTaxable">0.00</td>
+                    </tr>
+                    <!-- Dynamic GST Rows -->
+                    <tr id="prevCgstRow" class="gst-only-row hidden">
+                      <td>CGST @ 9% <em>(intra-state only)</em></td>
+                      <td class="mono text-right" id="prevSummaryCgst">0.00</td>
+                    </tr>
+                    <tr id="prevSgstRow" class="gst-only-row hidden">
+                      <td>SGST @ 9% <em>(intra-state only)</em></td>
+                      <td class="mono text-right" id="prevSummarySgst">0.00</td>
+                    </tr>
+                    <tr id="prevIgstRow" class="gst-only-row hidden">
+                      <td>IGST @ 18% <em>(inter-state only)</em></td>
+                      <td class="mono text-right" id="prevSummaryIgst">0.00</td>
+                    </tr>
+                    <tr id="prevNonGstTaxRow">
+                      <td>Tax Regime</td>
+                      <td class="mono text-right" style="color: #64748b;">Non-GST (0.00)</td>
+                    </tr>
+                    <tr>
+                      <td>Round-off</td>
+                      <td class="mono text-right" id="prevSummaryRoundoff">± 0.00</td>
+                    </tr>
+                    <tr class="grand-total-row">
+                      <td class="bold-cell">Grand Total</td>
+                      <td class="mono text-right bold-cell" id="prevSummaryGrandTotal">0.00</td>
+                    </tr>
+                    <tr>
+                      <td>Less: Advance received</td>
+                      <td class="mono text-right" id="prevSummaryAdvance">– 0.00</td>
+                    </tr>
+                    <tr class="balance-due-row">
+                      <td class="bold-cell">Balance Due</td>
+                      <td class="mono text-right bold-cell" id="prevSummaryBalance">0.00</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Payment Details Table -->
+            <div class="section-heading">Payment Details</div>
+            <div class="payment-table-wrap">
+              <table class="apisomi-table payment-table">
+                <thead>
+                  <tr>
+                    <th style="width: 25%;">Field</th>
+                    <th style="width: 75%;">Details</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="bold-cell">Account Name</td>
+                    <td id="prevBankAccName">Apisomi</td>
+                  </tr>
+                  <tr>
+                    <td class="bold-cell">Bank & Branch</td>
+                    <td id="prevBankBranch">HDFC Bank, Napier Town Branch, Jabalpur</td>
+                  </tr>
+                  <tr>
+                    <td class="bold-cell">Account No.</td>
+                    <td class="mono bold-cell" id="prevBankAccNo">50200088991122</td>
+                  </tr>
+                  <tr>
+                    <td class="bold-cell">IFSC</td>
+                    <td class="mono bold-cell" id="prevBankIfsc">HDFC0001234</td>
+                  </tr>
+                  <tr>
+                    <td class="bold-cell">UPI ID</td>
+                    <td class="mono" id="prevBankUpi">apisomi@okhdfcbank</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p class="quote-note">Please quote the invoice number in the payment reference.</p>
+
+            <!-- Terms & Notes Section -->
+            <div class="section-heading">Terms & Notes</div>
+            <ol class="terms-list">
+              <li>Payment is due within 15 days of the invoice date.</li>
+              <li>Late payments attract interest of 1.5% per month on the outstanding balance.</li>
+              <li>Source code, assets and IP transfer to the client on receipt of full payment, as agreed in the proposal.</li>
+              <li>TDS, if deducted, must be deposited and the certificate (Form 16A) shared within the statutory timeline.</li>
+              <li>Subject to Jabalpur jurisdiction.</li>
+            </ol>
+            <p class="project-custom-note" id="prevProjectNoteBlock">
+              <strong>Notes:</strong> <span id="prevProjectNote">Next milestone: Milestone 3 scheduled for 15 Nov 2026.</span>
+            </p>
+
+            <!-- Signatory Footer Block -->
+            <div class="signatory-section">
+              <div class="signatory-col">
+                <p class="for-company">For <strong>Apisomi</strong></p>
+                <div class="signature-space">
+                  <div class="signature-line"></div>
+                </div>
+                <p class="signatory-name">Ayush Sondhiya</p>
+                <p class="signatory-role">Founder & Authorised Signatory</p>
+              </div>
+            </div>
+
+            <!-- Footer note -->
+            <div class="computer-gen-footer">
+              This is a computer-generated invoice. Thank you for your business.
+            </div>
+
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Modal: Google Sheets Integration Settings -->
+    <div id="gsheetModal" class="modal-backdrop hidden">
+      <div class="modal-window" style="max-width: 720px;">
+        <div class="modal-header">
+          <div>
+            <h3>Permanent Google Sheets Sync</h3>
+            <p class="modal-sub">Automatically pushes each generated invoice row directly to your Google Sheet</p>
+          </div>
+          <button id="closeGsheetModalBtn" class="btn-close">&times;</button>
+        </div>
+
+        <div class="modal-body">
+          <div class="sync-status-card" id="syncStatusCard">
+            <div class="sync-status-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M4 3h16a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"></path>
+                <polyline points="4 9 20 9"></polyline>
+                <polyline points="4 15 20 15"></polyline>
+                <polyline points="10 3 10 21"></polyline>
+              </svg>
+            </div>
+            <div class="sync-status-details">
+              <h4 id="syncStatusTitle">Google Sheet Connection: Not Configured</h4>
+              <p id="syncStatusSubtitle">Connect your Google Sheet Webhook once to enable automatic cloud logging on every invoice export.</p>
+            </div>
+          </div>
+
+          <div class="form-group mt-2">
+            <label for="gsheetWebhookUrl"><strong>Google Apps Script Web App URL (Webhook)</strong></label>
+            <input type="url" id="gsheetWebhookUrl" placeholder="https://script.google.com/macros/s/AKfycbx.../exec" class="mono">
+            <small style="color:#94a3b8; font-size:0.75rem; display:block; margin-top:3px;">
+              Pasting this URL enables auto-append on every invoice generation.
+            </small>
+          </div>
+
+          <div class="form-group mt-2">
+            <label for="gsheetDirectUrl"><strong>Direct Google Sheet URL</strong></label>
+            <input type="url" id="gsheetDirectUrl" value="https://docs.google.com/spreadsheets/d/1fubQ-v4GZixmfQOOV2VnrJtoUDNjsSM-wdmwwXwkrQk/edit?usp=sharing" placeholder="https://docs.google.com/spreadsheets/d/...">
+            <small style="color:#94a3b8; font-size:0.75rem; display:block; margin-top:3px;">
+              Your permanent Google Sheet: <a href="https://docs.google.com/spreadsheets/d/1fubQ-v4GZixmfQOOV2VnrJtoUDNjsSM-wdmwwXwkrQk/edit?usp=sharing" target="_blank" style="color:#38bdf8;">invoice_tracking</a>
+            </small>
+          </div>
+
+          <!-- Quick Setup Guide -->
+          <div class="setup-guide-box mt-2">
+            <div class="flex-between">
+              <strong>Quick 2-Minute Setup Instructions:</strong>
+              <button id="copyScriptBtn" class="btn btn-sm btn-outline">Copy Google Apps Script</button>
+            </div>
+            <ol class="setup-steps">
+              <li>Create a new spreadsheet in <a href="https://sheets.new" target="_blank" style="color:#38bdf8; text-decoration:underline;">Google Sheets (sheets.new)</a>.</li>
+              <li>Go to <strong>Extensions &rarr; Apps Script</strong>.</li>
+              <li>Delete any code there, paste the copied script, and click <strong>Save</strong> (disk icon).</li>
+              <li>Click <strong>Deploy &rarr; New deployment</strong> &rarr; Select type: <strong>Web app</strong>.</li>
+              <li>Set <em>Execute as:</em> <strong>Me</strong> and <em>Who has access:</em> <strong>Anyone</strong>.</li>
+              <li>Click <strong>Deploy</strong> and copy the <strong>Web app URL</strong> into the field above!</li>
+            </ol>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <div class="flex-gap">
+            <button id="testGsheetSyncBtn" class="btn btn-secondary">Test Connection</button>
+            <a id="openSheetLink" href="#" target="_blank" class="btn btn-secondary hidden">
+              Open Google Sheet &rarr;
+            </a>
+          </div>
+          <button id="saveGsheetConfigBtn" class="btn btn-primary">Save & Connect</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal: Excel Ledger / Tracked Invoices Database -->
+    <div id="ledgerModal" class="modal-backdrop hidden">
+      <div class="modal-window">
+        <div class="modal-header">
+          <div>
+            <h3>Apisomi Automated Invoices Ledger</h3>
+            <p class="modal-sub">Cumulative tracker for all sent invoices &middot; Ready for Excel export (.xlsx)</p>
+          </div>
+          <button id="closeLedgerBtn" class="btn-close">&times;</button>
+        </div>
+
+        <div class="modal-body">
+          <!-- Summary Metrics -->
+          <div class="ledger-metrics-grid">
+            <div class="metric-card">
+              <span class="m-label">Total Invoices</span>
+              <span class="m-val" id="metricCount">0</span>
+            </div>
+            <div class="metric-card">
+              <span class="m-label">Total Billed (INR)</span>
+              <span class="m-val highlight" id="metricTotal">₹ 0.00</span>
+            </div>
+            <div class="metric-card">
+              <span class="m-label">GST Invoices</span>
+              <span class="m-val" id="metricGstCount">0</span>
+            </div>
+            <div class="metric-card">
+              <span class="m-label">Non-GST Invoices</span>
+              <span class="m-val" id="metricNonGstCount">0</span>
+            </div>
+          </div>
+
+          <!-- Ledger Table -->
+          <div class="ledger-table-wrap">
+            <table class="ledger-table">
+              <thead>
+                <tr>
+                  <th>Invoice No</th>
+                  <th>Date</th>
+                  <th>Project</th>
+                  <th>Client</th>
+                  <th>Tax Mode</th>
+                  <th style="text-align: right;">Taxable (₹)</th>
+                  <th style="text-align: right;">Grand Total (₹)</th>
+                  <th style="text-align: right;">Balance (₹)</th>
+                  <th style="text-align: center;">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="ledgerTbody">
+                <!-- Logged rows -->
+              </tbody>
+            </table>
+            <div id="emptyLedgerMessage" class="empty-state">
+              No invoices logged yet. Click <strong>"Export PDF & Log"</strong> to record your first invoice!
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button id="clearLedgerBtn" class="btn btn-outline-danger">Clear History</button>
+          <button id="exportExcelBtn" class="btn btn-success">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="12" y1="18" x2="12" y2="12"></line>
+              <line x1="9" y1="15" x2="15" y2="15"></line>
+            </svg>
+            Download Complete Invoices Ledger (.xlsx)
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

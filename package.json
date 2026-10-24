@@ -1,0 +1,8 @@
+{
+  "name": "apisomi-invoice-studio",
+  "version": "1.0.0",
+  "description": "Apisomi Tax & Non-GST Invoicing Studio with Automated Excel & Google Sheets Ledger",
+  "private": true,
+  "author": "Ayush Sondhiya <ayush.sondhiya@apisomi.com>",
+  "license": "MIT"
+}
