@@ -32,7 +32,7 @@ const state = {
     { id: 3, label: 'Milestone 3 — Production Handover (20%)', dueDate: '2026-11-15', amount: 23600, txn: '' }
   ],
   ledger: [],
-  gsheetWebhookUrl: localStorage.getItem('apisomi_gsheet_webhook') || '',
+  gsheetWebhookUrl: localStorage.getItem('apisomi_gsheet_webhook') || 'https://script.google.com/macros/s/AKfycbzXIOAA8Guo9nXkKAle7wlg_Wd5wwAQWkWE8bmHhnz13EEDukbhVKAvBzQq7P-h29kf/exec',
   gsheetDirectUrl: localStorage.getItem('apisomi_gsheet_direct') || 'https://docs.google.com/spreadsheets/d/1fubQ-v4GZixmfQOOV2VnrJtoUDNjsSM-wdmwwXwkrQk/edit?usp=sharing'
 };
 
