@@ -37,35 +37,50 @@ const state = {
 };
 
 const STORAGE_KEY = 'apisomi_invoices_ledger_v2';
-const GSCRIPT_TEMPLATE = `function doPost(e) {
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-  var data = JSON.parse(e.postData.contents);
-  
-  // Set headers on first row if empty
-  if (sheet.getLastRow() === 0) {
-    var headers = [
-      "Invoice No", "Date", "Due Date", "Project Code", "Project Name", 
-      "Milestone", "Client Name", "Client State", "Client GSTIN", "Tax Regime", 
-      "Subtotal (₹)", "Discount (₹)", "Taxable Value (₹)", "CGST (₹)", "SGST (₹)", 
-      "IGST (₹)", "Round-off (₹)", "Grand Total (₹)", "Advance Paid (₹)", "Balance Due (₹)", 
-      "Installments", "Logged Timestamp"
-    ];
-    sheet.appendRow(headers);
-    sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold").setBackground("#f1f5f9");
-    sheet.setFrozenRows(1);
+const GSCRIPT_TEMPLATE = `var SHEET_ID = "1fubQ-v4GZixmfQOOV2VnrJtoUDNjsSM-wdmwwXwkrQk";
+
+function getSheet() {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    if (ss) return ss.getActiveSheet();
+  } catch (e) {}
+  return SpreadsheetApp.openById(SHEET_ID).getActiveSheet();
+}
+
+function doPost(e) {
+  try {
+    var sheet = getSheet();
+    var data = JSON.parse(e.postData.contents);
+    
+    // Set headers on first row if empty
+    if (sheet.getLastRow() === 0) {
+      var headers = [
+        "Invoice No", "Date", "Due Date", "Project Code", "Project Name", 
+        "Milestone", "Client Name", "Client State", "Client GSTIN", "Tax Regime", 
+        "Subtotal (₹)", "Discount (₹)", "Taxable Value (₹)", "CGST (₹)", "SGST (₹)", 
+        "IGST (₹)", "Round-off (₹)", "Grand Total (₹)", "Advance Paid (₹)", "Balance Due (₹)", 
+        "Installments", "Logged Timestamp"
+      ];
+      sheet.appendRow(headers);
+      sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold").setBackground("#f1f5f9");
+      sheet.setFrozenRows(1);
+    }
+    
+    // Append new invoice row
+    sheet.appendRow([
+      data.invoiceNo || "", data.invoiceDate || "", data.dueDate || "", data.projectCode || "", data.projectName || "",
+      data.milestone || "", data.clientName || "", data.clientState || "", data.clientGstin || "", data.taxRegime || "",
+      data.subtotal || 0, data.discount || 0, data.taxableValue || 0, data.cgst || 0, data.sgst || 0,
+      data.igst || 0, data.roundOff || 0, data.grandTotal || 0, data.advanceReceived || 0, data.balanceDue || 0,
+      (data.installmentsCount ? data.installmentsCount + " Tranches" : ""), data.loggedAt || new Date().toLocaleString()
+    ]);
+    
+    return ContentService.createTextOutput(JSON.stringify({ status: "success", message: "Row added" }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ status: "error", error: err.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
   }
-  
-  // Append new invoice row
-  sheet.appendRow([
-    data.invoiceNo, data.invoiceDate, data.dueDate, data.projectCode, data.projectName,
-    data.milestone, data.clientName, data.clientState, data.clientGstin, data.taxRegime,
-    data.subtotal, data.discount, data.taxableValue, data.cgst, data.sgst,
-    data.igst, data.roundOff, data.grandTotal, data.advanceReceived, data.balanceDue,
-    data.installmentsCount + " Tranches", data.loggedAt
-  ]);
-  
-  return ContentService.createTextOutput(JSON.stringify({ status: "success", message: "Row added" }))
-    .setMimeType(ContentService.MimeType.JSON);
 }
 
 function doGet(e) {
@@ -1172,7 +1187,7 @@ async function pushToGoogleSheet(record) {
     await fetch(state.gsheetWebhookUrl, {
       method: 'POST',
       mode: 'no-cors',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify(record)
     });
     return true;
